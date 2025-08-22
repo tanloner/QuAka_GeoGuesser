@@ -1,0 +1,241 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+}
+
+.container, .admin-container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.screen {
+    display: block;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Registration */
+#registration {
+    text-align: center;
+    padding-top: 20vh;
+}
+
+#registration h1 {
+    color: white;
+    font-size: 3em;
+    margin-bottom: 40px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+input[type="text"] {
+    padding: 15px;
+    font-size: 18px;
+    border: none;
+    border-radius: 8px;
+    width: 300px;
+    max-width: 90vw;
+    text-align: center;
+}
+
+button {
+    padding: 15px 30px;
+    font-size: 18px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #45a049;
+}
+
+button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+/* Waiting */
+#waiting {
+    text-align: center;
+    padding-top: 10vh;
+    color: white;
+}
+
+#playersList {
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 20px;
+    margin-top: 30px;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#playersUl {
+    list-style: none;
+    text-align: left;
+}
+
+#playersUl li {
+    padding: 5px;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+/* Playing */
+#playing {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.game-info {
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#countdown {
+    font-size: 24px;
+    font-weight: bold;
+    color: #ff6b6b;
+}
+
+#map {
+    flex: 1;
+    min-height: 400px;
+}
+
+.controls {
+    background: white;
+    padding: 20px;
+    text-align: center;
+}
+
+/* Waiting Results */
+#waiting-results {
+    text-align: center;
+    padding-top: 20vh;
+    color: white;
+}
+
+/* Admin Styles */
+.admin-container {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin: 20px;
+}
+
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: #f5f5f5;
+    border-radius: 10px 10px 0 0;
+}
+
+.countdown-big {
+    font-size: 48px;
+    font-weight: bold;
+    color: #ff6b6b;
+}
+
+.image-container {
+    text-align: center;
+    padding: 20px;
+}
+
+#currentImage {
+    max-width: 100%;
+    max-height: 60vh;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.admin-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+#resultsMap {
+    height: 400px;
+    margin: 20px 0;
+    border-radius: 10px;
+}
+
+.results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: #f5f5f5;
+    border-radius: 10px 10px 0 0;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+tr:hover {
+    background-color: #f5f5f5;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .admin-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .countdown-big {
+        font-size: 36px;
+    }
+
+    .results-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+}

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoGuesser - Admin</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+<div class="admin-container">
+    <div id="admin-waiting" class="screen">
+        <h1>GeoGuesser Admin</h1>
+        <div class="admin-controls">
+            <button onclick="startGame()" id="startBtn">Spiel starten</button>
+            <div id="playerCount">Teilnehmer: 0</div>
+        </div>
+        <div id="playersListAdmin"></div>
+    </div>
+
+    <div id="admin-playing" class="screen hidden">
+        <div class="admin-header">
+            <span id="adminRoundInfo">Runde 1</span>
+            <span id="adminCountdown" class="countdown-big">30</span>
+            <span id="guessCount">Guesses: 0</span>
+        </div>
+
+        <div class="image-container">
+            <img id="currentImage" src="" alt="Aktuelles Bild">
+        </div>
+    </div>
+
+    <div id="admin-results" class="screen hidden">
+        <div class="results-header">
+            <h2>Ergebnisse</h2>
+            <button onclick="nextRound()" id="nextBtn">Nächste Runde</button>
+        </div>
+        <div id="resultsMap"></div>
+        <div id="resultsTable"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    let resultsMap;
+    let currentRound = 0;
+
+    function startGame() {
+        socket.emit('start-game');
+    }
+
+    function nextRound() {
+        socket.emit('next-round');
+    }
+
+    function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+        document.getElementById(screenId).classList.remove('hidden');
+    }
+
+    function initResultsMap() {
+        if (!resultsMap) {
+            resultsMap = L.map('resultsMap').setView([20, 0], 2);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(resultsMap);
+        }
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Radius der Erde in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    function calculateScore(distanceKm) {
+        // Punktesystem: 5000 Punkte max, weniger je weiter weg
+        const maxDistance = 20000; // 20.000 km = 0 Punkte
+        if (distanceKm >= maxDistance) return 0;
+        return Math.round(5000 * (1 - distanceKm / maxDistance));
+    }
+
+    // Socket Events
+    socket.on('players-update', (players) => {
+        document.getElementById('playerCount').textContent = `Teilnehmer: ${players.length}`;
+
+        const container = document.getElementById('playersListAdmin');
+        container.innerHTML = '<h3>Teilnehmer:</h3>';
+        const ul = document.createElement('ul');
+        players.forEach(player => {
+            const li = document.createElement('li');
+            li.textContent = `${player.name} (${player.device.platform})`;
+            ul.appendChild(li);
+        });
+        container.appendChild(ul);
+    });
+
+    socket.on('game-started', (data) => {
+        showScreen('admin-playing');
+        document.getElementById('currentImage').src = data.image.imagePath;
+        document.getElementById('adminRoundInfo').textContent = 'Runde 1';
+        currentRound = 1;
+    });
+
+    socket.on('next-round', (data) => {
+        showScreen('admin-playing');
+        document.getElementById('currentImage').src = data.image.imagePath;
+        document.getElementById('adminRoundInfo').textContent = `Runde ${data.round}/${data.totalRounds}`;
+        document.getElementById('guessCount').textContent = 'Guesses: 0';
+        currentRound = data.round;
+    });
+
+    socket.on('countdown-update', (count) => {
+        document.getElementById('adminCountdown').textContent = count;
+    });
+
+    socket.on('new-guess', (data) => {
+        document.getElementById('guessCount').textContent = `Guesses: ${data.totalGuesses}`;
+    });
+
+    socket.on('round-finished', (data) => {
+        showScreen('admin-results');
+        initResultsMap();
+
+        // Karte leeren
+        resultsMap.eachLayer((layer) => {
+            if (layer instanceof L.Marker || layer instanceof L.Polyline) {
+                resultsMap.removeLayer(layer);
+            }
+        });
+
+        // Korrekter Punkt (rot)
+        const correctMarker = L.marker([data.correctLocation.lat, data.correctLocation.lng], {
+            icon: L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41]
+            })
+        }).addTo(resultsMap);
+
+        // Ergebnis-Tabelle
+        const results = [];
+        Object.values(data.guesses).forEach(guess => {
+            const distance = calculateDistance(
+                data.correctLocation.lat, data.correctLocation.lng,
+                guess.lat, guess.lng
+            );
+            const score = calculateScore(distance);
+
+            results.push({
+                name: guess.playerName,
+                distance: distance,
+                score: score,
+                lat: guess.lat,
+                lng: guess.lng
+            });
+
+            // Guess Marker (blau)
+            const guessMarker = L.marker([guess.lat, guess.lng], {
+                icon: L.icon({
+                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41]
+                })
+            }).addTo(resultsMap);
+
+            // Linie vom Guess zum korrekten Punkt
+            L.polyline([
+                [guess.lat, guess.lng],
+                [data.correctLocation.lat, data.correctLocation.lng]
+            ], {color: 'blue', weight: 2, opacity: 0.7}).addTo(resultsMap);
+        });
+
+        // Karte auf alle Punkte zentrieren
+        const allPoints = [[data.correctLocation.lat, data.correctLocation.lng]];
+        Object.values(data.guesses).forEach(guess => {
+            allPoints.push([guess.lat, guess.lng]);
+        });
+
+        if (allPoints.length > 1) {
+            resultsMap.fitBounds(allPoints, {padding: [20, 20]});
+        } else {
+            resultsMap.setView([data.correctLocation.lat, data.correctLocation.lng], 5);
+        }
+
+        // Ergebnis-Tabelle erstellen
+        results.sort((a, b) => b.score - a.score);
+        let tableHTML = '<table><tr><th>Rang</th><th>Name</th><th>Distanz</th><th>Punkte</th></tr>';
+        results.forEach((result, index) => {
+            tableHTML += `<tr><td>${index + 1}</td><td>${result.name}</td><td>${Math.round(result.distance)} km</td><td>${result.score}</td></tr>`;
+        });
+        tableHTML += '</table>';
+
+        document.getElementById('resultsTable').innerHTML = tableHTML;
+    });
+
+    socket.on('game-finished', () => {
+        document.getElementById('nextBtn').textContent = 'Spiel beendet';
+        document.getElementById('nextBtn').disabled = true;
+    });
+
+    // Initial screen
+    showScreen('admin-waiting');
+</script>
+</body>
+</html>

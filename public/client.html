@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoGuesser - Teilnehmer</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+<div class="container">
+    <div id="registration" class="screen">
+        <h1>GeoGuesser Game</h1>
+        <div class="form-group">
+            <input type="text" id="playerName" placeholder="Dein Name" maxlength="20">
+            <button onclick="registerPlayer()">Beitreten</button>
+        </div>
+    </div>
+
+    <div id="waiting" class="screen hidden">
+        <h2>Warte auf Spielstart...</h2>
+        <div id="playersList">
+            <h3>Teilnehmer:</h3>
+            <ul id="playersUl"></ul>
+        </div>
+    </div>
+
+    <div id="playing" class="screen hidden">
+        <div class="game-info">
+            <span id="roundInfo">Runde 1</span>
+            <span id="countdown">30</span>
+        </div>
+        <div id="map"></div>
+        <div class="controls">
+            <button id="submitGuess" onclick="submitGuess()" disabled>Guess abschicken</button>
+            <p id="status">Klicke auf die Karte um einen Punkt zu setzen</p>
+        </div>
+    </div>
+
+    <div id="waiting-results" class="screen hidden">
+        <h2>Guess abgeschickt!</h2>
+        <p>Warte auf andere Spieler...</p>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    let map;
+    let selectedMarker;
+    let selectedLocation;
+
+    function registerPlayer() {
+        const name = document.getElementById('playerName').value.trim();
+        if (!name) {
+            alert('Bitte gib einen Namen ein!');
+            return;
+        }
+
+        const deviceInfo = {
+            userAgent: navigator.userAgent,
+            screenSize: `${screen.width}x${screen.height}`,
+            platform: navigator.platform
+        };
+
+        socket.emit('register-player', {
+            name: name,
+            device: deviceInfo
+        });
+
+        showScreen('waiting')
+    }
+
+    function initMap() {
+        map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        map.on('click', function(e) {
+            if (selectedMarker) {
+                map.removeLayer(selectedMarker);
+            }
+
+            selectedLocation = e.latlng;
+            selectedMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(map);
+
+            document.getElementById('submitGuess').disabled = false;
+            document.getElementById('status').textContent = 'Klicke "Guess abschicken" wenn du bereit bist';
+        });
+    }
+
+    function submitGuess() {
+        if (!selectedLocation) return;
+
+        socket.emit('submit-guess', {
+            lat: selectedLocation.lat,
+            lng: selectedLocation.lng
+        });
+
+        showScreen('waiting-results');
+    }
+
+    function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+        document.getElementById(screenId).classList.remove('hidden');
+    }
+
+    // Socket Events
+    socket.on('players-update', (players) => {
+        const ul = document.getElementById('playersUl');
+        ul.innerHTML = '';
+        players.forEach(player => {
+            const li = document.createElement('li');
+            li.textContent = player.name;
+            ul.appendChild(li);
+        });
+    });
+
+    socket.on('game-started', (data) => {
+        showScreen('playing');
+        if (!map) initMap();
+
+        // Reset für neue Runde
+        if (selectedMarker) {
+            map.removeLayer(selectedMarker);
+            selectedMarker = null;
+        }
+        selectedLocation = null;
+        document.getElementById('submitGuess').disabled = true;
+        document.getElementById('status').textContent = 'Klicke auf die Karte um einen Punkt zu setzen';
+        document.getElementById('roundInfo').textContent = 'Runde 1';
+    });
+
+    socket.on('next-round', (data) => {
+        showScreen('playing');
+
+        // Reset für neue Runde
+        if (selectedMarker) {
+            map.removeLayer(selectedMarker);
+            selectedMarker = null;
+        }
+        selectedLocation = null;
+        document.getElementById('submitGuess').disabled = true;
+        document.getElementById('status').textContent = 'Klicke auf die Karte um einen Punkt zu setzen';
+        document.getElementById('roundInfo').textContent = `Runde ${data.round}/${data.totalRounds}`;
+    });
+
+    socket.on('countdown-update', (count) => {
+        document.getElementById('countdown').textContent = count;
+    });
+
+    socket.on('round-finished', () => {
+        showScreen('waiting-results');
+    });
+
+    socket.on('game-finished', () => {
+        showScreen('waiting-results');
+        document.querySelector('#waiting-results h2').textContent = 'Spiel beendet!';
+    });
+
+    // Initial screen
+    showScreen('registration');
+</script>
+</body>
+</html>

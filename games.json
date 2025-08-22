@@ -1,0 +1,20 @@
+[
+  {
+    "imagePath": "images/paris.jpg",
+    "lat": 48.8566,
+    "lng": 2.3522,
+    "description": "Eiffelturm, Paris"
+  },
+  {
+    "imagePath": "images/newyork.jpg",
+    "lat": 40.7484,
+    "lng": -73.9857,
+    "description": "Times Square, New York"
+  },
+  {
+    "imagePath": "images/tokyo.jpg",
+    "lat": 35.6762,
+    "lng": 139.6503,
+    "description": "Tokyo"
+  }
+]
