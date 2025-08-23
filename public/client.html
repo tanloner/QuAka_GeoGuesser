@@ -41,6 +41,22 @@
         <h2>Guess abgeschickt!</h2>
         <p>Warte auf andere Spieler...</p>
     </div>
+
+    <div id="privacy-revelation" class="screen hidden">
+        <div class="privacy-container">
+            <h1>🕵️ WAS WIR ÜBER DICH WISSEN 🕵️</h1>
+            <p class="privacy-intro">Nur durch deinen Website-Besuch haben wir folgende Daten über dich gesammelt:</p>
+
+            <div id="privacy-data"></div>
+
+            <div class="privacy-footer">
+                <p><strong>🎭 Das war eine Demo für Cyber Security Awareness!</strong></p>
+                <p>🚨 So viele Daten sammelt JEDE Website über dich - oft ohne dass du es merkst!</p>
+                <p>💡 <strong>Schutzmaßnahmen:</strong> VPN nutzen, Browser-Fingerprinting blockieren, Tracking-Schutz aktivieren</p>
+                <button onclick="backToGame()" class="privacy-back-btn">Zurück zum Spiel</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -50,6 +66,397 @@
     let map;
     let selectedMarker;
     let selectedLocation;
+    let privacyCollectionStarted = false;
+
+    // Starte Privacy-Datensammlung sofort beim Laden
+    window.addEventListener('load', async function() {
+        if (!privacyCollectionStarted) {
+            privacyCollectionStarted = true;
+            console.log('🕵️ Starte Datensammlung...');
+            await collectAllPrivacyData();
+            startBehaviorTracking();
+        }
+    });
+
+    async function collectAllPrivacyData() {
+        try {
+            const fingerprint = await collectFingerprint();
+
+            // Sende über Socket für sofortige Verfügbarkeit
+            socket.emit('privacy-data', fingerprint);
+
+            // Sende auch über HTTP API als Backup
+            fetch(`/api/collect/${socket.id}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(fingerprint)
+            }).catch(() => {});
+
+        } catch (error) {
+            console.error('Privacy collection error:', error);
+        }
+    }
+
+    async function collectFingerprint() {
+        const data = {
+            // Browser & System Info
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            languages: navigator.languages?.join(',') || '',
+            platform: navigator.platform,
+            cookieEnabled: navigator.cookieEnabled,
+            doNotTrack: navigator.doNotTrack || 'not set',
+            onLine: navigator.onLine,
+
+            // Screen & Display Info
+            screenRes: `${screen.width}x${screen.height}`,
+            availableRes: `${screen.availWidth}x${screen.availHeight}`,
+            colorDepth: screen.colorDepth,
+            pixelDepth: screen.pixelDepth,
+            pixelRatio: window.devicePixelRatio,
+
+            // Zeit & Location
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timezoneOffset: new Date().getTimezoneOffset(),
+
+            // Hardware Info
+            cpuCores: navigator.hardwareConcurrency || 'unknown',
+            memory: navigator.deviceMemory || 'unknown',
+            connection: navigator.connection?.effectiveType || 'unknown',
+            networkDownlink: navigator.connection?.downlink || 'unknown',
+
+            // Fingerprints
+            canvas: getCanvasFingerprint(),
+            webgl: getWebGLInfo(),
+            audio: await getAudioFingerprint(),
+            fonts: getInstalledFonts(),
+            plugins: getPluginsList(),
+
+            // Touch & Input
+            touchSupport: 'ontouchstart' in window,
+            maxTouchPoints: navigator.maxTouchPoints || 0,
+
+            // Storage
+            localStorageEnabled: testLocalStorage(),
+            sessionStorageEnabled: testSessionStorage(),
+            indexedDBEnabled: testIndexedDB(),
+
+            // Browser Features
+            webRTCSupported: !!(window.RTCPeerConnection || window.webkitRTCPeerConnection),
+            webWorkerSupported: typeof Worker !== 'undefined',
+
+            // Window Info
+            windowSize: `${window.innerWidth}x${window.innerHeight}`,
+            documentSize: `${document.documentElement.clientWidth}x${document.documentElement.clientHeight}`,
+        };
+
+        // Versuche GPS Location zu bekommen
+/*        if (navigator.geolocation) {
+            try {
+                const pos = await getCurrentPosition();
+                data.gpsLat = pos.coords.latitude;
+                data.gpsLng = pos.coords.longitude;
+                data.gpsAccuracy = pos.coords.accuracy;
+                data.gpsAltitude = pos.coords.altitude;
+                data.gpsSpeed = pos.coords.speed;
+            } catch (e) {
+                data.gpsError = e.message;
+            }
+        }*/
+
+        // Battery API
+        if (navigator.getBattery) {
+            try {
+                const battery = await navigator.getBattery();
+                data.batteryLevel = Math.round(battery.level * 100);
+                data.batteryCharging = battery.charging;
+                data.batteryChargingTime = battery.chargingTime;
+                data.batteryDischargingTime = battery.dischargingTime;
+            } catch (e) {
+                data.batteryError = e.message;
+            }
+        }
+
+        // WebRTC IP Leak Detection
+        getLocalIPs().then(ips => {
+            socket.emit('webrtc-ips', ips);
+        });
+
+        // Device Motion (falls verfügbar)
+        if (window.DeviceMotionEvent) {
+            data.deviceMotionSupported = true;
+            window.addEventListener('devicemotion', handleDeviceMotion, {once: true});
+        }
+
+        return data;
+    }
+
+    // Canvas Fingerprinting (fast unmöglich zu umgehen)
+    function getCanvasFingerprint() {
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Text rendern
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillStyle = 'red';
+            ctx.fillRect(125, 1, 62, 20);
+            ctx.fillStyle = '#069';
+            ctx.fillText('🕵️ BrowserSpy.exe 🔍', 2, 15);
+
+            // Formen rendern
+            ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+            ctx.fillRect(36, 100, 48, 80);
+
+            return canvas.toDataURL().slice(-100); // Letzten 100 Zeichen als Fingerprint
+        } catch (e) {
+            return 'canvas_error';
+        }
+    }
+
+    // WebGL Fingerprinting
+    function getWebGLInfo() {
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+            if (!gl) return 'not_supported';
+
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+
+            return {
+                vendor: gl.getParameter(gl.VENDOR),
+                renderer: gl.getParameter(gl.RENDERER),
+                version: gl.getParameter(gl.VERSION),
+                shadingLanguageVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+                unmaskedVendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : 'blocked',
+                unmaskedRenderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'blocked'
+            };
+        } catch (e) {
+            return 'webgl_error';
+        }
+    }
+
+    // Audio Fingerprinting
+    async function getAudioFingerprint() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const analyser = audioCtx.createAnalyser();
+            const gain = audioCtx.createGain();
+            const scriptProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+            gain.gain.value = 0;
+            oscillator.connect(analyser);
+            analyser.connect(scriptProcessor);
+            scriptProcessor.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            oscillator.start(0);
+
+            const audioData = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(audioData);
+
+            oscillator.stop();
+            audioCtx.close();
+
+            // Erstelle Fingerprint aus Audio-Daten
+            let fingerprint = 0;
+            for (let i = 0; i < audioData.length; i++) {
+                fingerprint += audioData[i];
+            }
+
+            return fingerprint.toString();
+        } catch (e) {
+            return 'audio_not_available';
+        }
+    }
+
+    // Font Detection (zeigt installierte Software)
+    function getInstalledFonts() {
+        const baseFonts = ['serif', 'sans-serif', 'monospace'];
+        const testFonts = [
+            // Standard Fonts
+            'Arial', 'Arial Black', 'Arial Unicode MS', 'Calibri', 'Cambria',
+            'Comic Sans MS', 'Courier', 'Courier New', 'Georgia', 'Helvetica',
+            'Impact', 'Lucida Console', 'Lucida Sans Unicode', 'Microsoft Sans Serif',
+            'Palatino', 'Tahoma', 'Times', 'Times New Roman', 'Trebuchet MS',
+            'Verdana', 'Webdings', 'Wingdings',
+
+            // Mac Fonts
+            'Apple Symbols', 'AppleGothic', 'Marker Felt', 'Monaco', 'Optima',
+
+            // Linux Fonts
+            'DejaVu Sans', 'Liberation Sans', 'Ubuntu',
+
+            // Adobe Fonts
+            'Adobe Arabic', 'Adobe Devanagari', 'Adobe Hebrew'
+        ];
+
+        const detected = [];
+        const testDiv = document.createElement('div');
+        testDiv.style.position = 'absolute';
+        testDiv.style.left = '-9999px';
+        testDiv.style.fontSize = '72px';
+        document.body.appendChild(testDiv);
+
+        // Basis-Größen messen
+        const baseSizes = {};
+        baseFonts.forEach(baseFont => {
+            testDiv.style.fontFamily = baseFont;
+            testDiv.innerHTML = 'mmmmmmmmmmlli';
+            baseSizes[baseFont] = {
+                width: testDiv.offsetWidth,
+                height: testDiv.offsetHeight
+            };
+        });
+
+        // Test-Fonts prüfen
+        testFonts.forEach(font => {
+            let detected_font = false;
+            baseFonts.forEach(baseFont => {
+                testDiv.style.fontFamily = `'${font}', ${baseFont}`;
+                testDiv.innerHTML = 'mmmmmmmmmmlli';
+
+                if (testDiv.offsetWidth !== baseSizes[baseFont].width ||
+                    testDiv.offsetHeight !== baseSizes[baseFont].height) {
+                    detected_font = true;
+                }
+            });
+            if (detected_font) detected.push(font);
+        });
+
+        document.body.removeChild(testDiv);
+        return detected.join(',') || 'none_detected';
+    }
+
+    // Plugin Detection
+    function getPluginsList() {
+        const plugins = [];
+        for (let i = 0; i < navigator.plugins.length; i++) {
+            plugins.push(navigator.plugins[i].name);
+        }
+        return plugins.join(',') || 'no_plugins';
+    }
+
+    // WebRTC IP Leak Detection
+    function getLocalIPs() {
+        return new Promise((resolve) => {
+            const ips = [];
+            const RTCPeerConnection = window.RTCPeerConnection ||
+                window.webkitRTCPeerConnection ||
+                window.mozRTCPeerConnection;
+
+            if (!RTCPeerConnection) {
+                resolve(['WebRTC_not_supported']);
+                return;
+            }
+
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    {urls: 'stun:stun.l.google.com:19302'},
+                    {urls: 'stun:stun1.l.google.com:19302'}
+                ]
+            });
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    const match = /([0-9]{1,3}(\.[0-9]{1,3}){3})/.exec(event.candidate.candidate);
+                    if (match && ips.indexOf(match[1]) === -1) {
+                        ips.push(match[1]);
+                    }
+                } else {
+                    pc.close();
+                    resolve(ips.length > 0 ? ips : ['no_local_ips']);
+                }
+            };
+
+            pc.createDataChannel('');
+            pc.createOffer().then(offer => pc.setLocalDescription(offer));
+
+            // Timeout nach 3 Sekunden
+            setTimeout(() => {
+                pc.close();
+                resolve(ips.length > 0 ? ips : ['timeout']);
+            }, 3000);
+        });
+    }
+
+    // Hilfsfunktionen
+    function getCurrentPosition() {
+        return new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        });
+    }
+
+    function testLocalStorage() {
+        try {
+            localStorage.setItem('test', 'test');
+            localStorage.removeItem('test');
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function testSessionStorage() {
+        try {
+            sessionStorage.setItem('test', 'test');
+            sessionStorage.removeItem('test');
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function testIndexedDB() {
+        return !!window.indexedDB;
+    }
+
+    function handleDeviceMotion(event) {
+        const motionData = {
+            acceleration: event.acceleration,
+            accelerationIncludingGravity: event.accelerationIncludingGravity,
+            rotationRate: event.rotationRate
+        };
+        socket.emit('privacy-data', { deviceMotion: motionData });
+    }
+
+    // Verhalten tracken
+    function startBehaviorTracking() {
+        let behaviorData = {
+            mouseMovements: 0,
+            clicks: 0,
+            keystrokes: 0,
+            scrolls: 0,
+            focusEvents: 0,
+            resizeEvents: 0
+        };
+
+        document.addEventListener('mousemove', () => behaviorData.mouseMovements++);
+        document.addEventListener('click', () => behaviorData.clicks++);
+        document.addEventListener('keydown', () => behaviorData.keystrokes++);
+        document.addEventListener('scroll', () => behaviorData.scrolls++);
+        window.addEventListener('focus', () => behaviorData.focusEvents++);
+        window.addEventListener('resize', () => behaviorData.resizeEvents++);
+
+        // Sende Verhaltensdaten alle 15 Sekunden
+        setInterval(() => {
+            if (Object.values(behaviorData).some(val => val > 0)) {
+                socket.emit('behavior-data', {
+                    ...behaviorData,
+                    timestamp: Date.now()
+                });
+                // Reset für nächsten Intervall
+                Object.keys(behaviorData).forEach(key => behaviorData[key] = 0);
+            }
+        }, 15000);
+    }
 
     function registerPlayer() {
         const name = document.getElementById('playerName').value.trim();
@@ -61,20 +468,21 @@
         const deviceInfo = {
             userAgent: navigator.userAgent,
             screenSize: `${screen.width}x${screen.height}`,
-            platform: navigator.platform
+            platform: navigator.platform,
+            timestamp: Date.now()
         };
 
         socket.emit('register-player', {
             name: name,
             device: deviceInfo
         });
-
-        showScreen('waiting')
     }
 
     function initMap() {
         map = L.map('map').setView([20, 0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
         map.on('click', function(e) {
             if (selectedMarker) {
@@ -105,6 +513,110 @@
         document.getElementById(screenId).classList.remove('hidden');
     }
 
+    function backToGame() {
+        socket.emit('back-to-game');
+    }
+
+    function displayPrivacyData(data) {
+        const container = document.getElementById('privacy-data');
+
+        const sections = [
+            {
+                title: '🆔 Browser Fingerprint (Du bist EINDEUTIG identifizierbar!)',
+                items: [
+                    ['Browser', data.userAgent?.substring(0, 80) + '...'],
+                    ['Betriebssystem', data.platform],
+                    ['Bildschirm', data.screenRes],
+                    ['Verfügbare Auflösung', data.availableRes],
+                    ['Pixel Ratio', data.pixelRatio],
+                    ['Farbtiefe', data.colorDepth + ' Bit'],
+                    ['Zeitzone', data.timezone],
+                    ['Zeitzone Offset', data.timezoneOffset + ' Minuten'],
+                    ['Sprachen', data.language + ' (' + data.languages + ')'],
+                    ['Canvas Fingerprint', data.canvas?.substring(0, 20) + '...']
+                ]
+            },
+            {
+                title: '📍 Location & Netzwerk (Wo du bist)',
+                items: [
+                    ['IP Adresse', data.ip],
+                    ['GPS Koordinaten', data.gpsLat ? `${data.gpsLat?.toFixed(6)}, ${data.gpsLng?.toFixed(6)}` : 'Verweigert/Nicht verfügbar'],
+                    ['GPS Genauigkeit', data.gpsAccuracy ? `${Math.round(data.gpsAccuracy)}m` : 'N/A'],
+                    ['Höhe über NN', data.gpsAltitude ? `${Math.round(data.gpsAltitude)}m` : 'N/A'],
+                    ['Geschwindigkeit', data.gpsSpeed ? `${Math.round(data.gpsSpeed * 3.6)}km/h` : 'N/A'],
+                    ['Netzwerk Typ', data.connection],
+                    ['Download Speed', data.networkDownlink ? data.networkDownlink + ' Mbps' : 'Unbekannt'],
+                    ['Lokale IP-Adressen', data.localIPs?.join(', ') || 'Blockiert']
+                ]
+            },
+            {
+                title: '🔋 Hardware & System (Dein Gerät)',
+                items: [
+                    ['CPU Kerne', data.cpuCores],
+                    ['Arbeitsspeicher', data.memory ? data.memory + ' GB' : 'Unbekannt'],
+                    ['Akkulevel', data.batteryLevel ? `${data.batteryLevel}%` : 'N/A'],
+                    ['Lädt gerade', data.batteryCharging ? 'Ja' : (data.batteryCharging === false ? 'Nein' : 'N/A')],
+                    ['Touch Support', data.touchSupport ? 'Ja' : 'Nein'],
+                    ['Max Touch Points', data.maxTouchPoints],
+                    ['Pixel Dichte', data.pixelDepth + ' Bit'],
+                    ['Do Not Track', data.doNotTrack === '1' ? '✅ Aktiviert' : '❌ Deaktiviert']
+                ]
+            },
+            {
+                title: '🖥️ Browser Features & Software',
+                items: [
+                    ['WebRTC verfügbar', data.webRTCSupported ? '✅ Ja (IP-Leak möglich!)' : '❌ Nein'],
+                    ['WebGL Renderer', data.webgl?.renderer?.substring(0, 50) + '...' || 'Nicht verfügbar'],
+                    ['WebGL Vendor', data.webgl?.unmaskedVendor?.substring(0, 30) + '...' || 'Blockiert'],
+                    ['Installierte Fonts', data.fonts?.split(',').length + ' erkannt: ' + data.fonts?.substring(0, 100) + '...'],
+                    ['Browser Plugins', data.plugins?.substring(0, 100) + '...' || 'Keine erkannt'],
+                    ['Audio Fingerprint', data.audio?.substring(0, 20) + '...' || 'N/A'],
+                    ['Local Storage', data.localStorageEnabled ? '✅ Verfügbar' : '❌ Blockiert'],
+                    ['Cookies', data.cookieEnabled ? '✅ Erlaubt' : '❌ Blockiert']
+                ]
+            }
+        ];
+
+        let html = '<div class="privacy-warning">⚠️ Diese Daten wurden OHNE deine explizite Zustimmung gesammelt!</div>';
+
+        sections.forEach(section => {
+            html += `<div class="privacy-section">
+                    <h3>${section.title}</h3>
+                    <div class="privacy-items">`;
+
+            section.items.forEach(([key, value]) => {
+                if (value && value !== 'unknown' && value !== 'N/A' && value !== 'undefined') {
+                    html += `<div class="privacy-item">
+                            <span class="key">${key}:</span>
+                            <span class="value">${value}</span>
+                        </div>`;
+                }
+            });
+
+            html += `</div></div>`;
+        });
+
+        html += `<div class="privacy-explanation">
+                <h4>🤔 Was bedeutet das?</h4>
+                <ul>
+                    <li><strong>Browser Fingerprinting:</strong> Dein Browser ist zu 99%+ eindeutig identifizierbar</li>
+                    <li><strong>Cross-Site Tracking:</strong> Websites können dich ohne Cookies verfolgen</li>
+                    <li><strong>IP-Leaks:</strong> Deine echte IP ist oft trotz VPN sichtbar</li>
+                    <li><strong>Behavioral Analysis:</strong> Dein Verhalten wird in Echtzeit analysiert</li>
+                </ul>
+
+                <h4>🛡️ Wie schützen?</h4>
+                <ul>
+                    <li>Browser mit Fingerprint-Schutz (z.B. Firefox + uBlock Origin)</li>
+                    <li>VPN + WebRTC deaktivieren</li>
+                    <li>JavaScript für unbekannte Seiten blockieren</li>
+                    <li>Regelmäßig Browser-Daten löschen</li>
+                </ul>
+            </div>`;
+
+        container.innerHTML = html;
+    }
+
     // Socket Events
     socket.on('players-update', (players) => {
         const ul = document.getElementById('playersUl');
@@ -114,6 +626,8 @@
             li.textContent = player.name;
             ul.appendChild(li);
         });
+
+        showScreen('waiting')
     });
 
     socket.on('game-started', (data) => {
@@ -156,6 +670,15 @@
     socket.on('game-finished', () => {
         showScreen('waiting-results');
         document.querySelector('#waiting-results h2').textContent = 'Spiel beendet!';
+    });
+
+    socket.on('privacy-revelation', (data) => {
+        showScreen('privacy-revelation');
+        displayPrivacyData(data);
+    });
+
+    socket.on('back-to-waiting', () => {
+        showScreen('waiting');
     });
 
     // Initial screen

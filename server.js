@@ -9,9 +9,13 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 app.use(express.static('public'));
+app.use(express.json());
+
+// Vertraue Proxy für echte IP-Adressen
+app.set('trust proxy', true);
 
 let gameState = {
-    phase: 'waiting', // waiting, playing, results
+    phase: 'waiting', // waiting, playing, results, privacy
     players: {},
     currentRound: 0,
     currentImage: null,
@@ -19,6 +23,9 @@ let gameState = {
     countdown: 30,
     countdownInterval: null
 };
+
+// Privacy-Daten sammeln
+let collectedData = {};
 
 // Lade Spiel-Daten
 let gameData = [];
@@ -32,11 +39,65 @@ try {
             "lat": 52.5200,
             "lng": 13.4050,
             "description": "Berlin"
+        },
+        {
+            "imagePath": "images/example2.jpg",
+            "lat": 48.8566,
+            "lng": 2.3522,
+            "description": "Paris"
         }
     ];
     fs.writeFileSync('games.json', JSON.stringify(exampleData, null, 2));
     gameData = exampleData;
 }
+
+// API Route für Datensammlung
+app.post('/api/collect/:socketId', (req, res) => {
+    const socketId = req.params.socketId;
+    const data = req.body;
+
+    if (!collectedData[socketId]) {
+        collectedData[socketId] = {};
+    }
+
+    // Sammle alle Daten
+    collectedData[socketId] = {
+        ...collectedData[socketId],
+        ...data,
+        timestamp: new Date(),
+        ip: req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'],
+        headers: {
+            userAgent: req.headers['user-agent'],
+            acceptLanguage: req.headers['accept-language'],
+            acceptEncoding: req.headers['accept-encoding'],
+            referer: req.headers['referer'],
+            origin: req.headers['origin']
+        }
+    };
+
+    console.log(`Daten gesammelt für ${socketId}:`, Object.keys(collectedData[socketId]).length, 'Felder');
+    res.json({status: 'collected'});
+});
+
+// GET Route für einfache Datensammlung (für URL-Parameter)
+app.get('/api/collect/:socketId', (req, res) => {
+    const socketId = req.params.socketId;
+    const data = req.query;
+
+    if (!collectedData[socketId]) {
+        collectedData[socketId] = {};
+    }
+
+    // Merge mit existierenden Daten
+    collectedData[socketId] = {
+        ...collectedData[socketId],
+        ...data,
+        timestamp: new Date(),
+        ip: req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'],
+    };
+
+    res.json({status: 'collected'});
+});
 
 io.on('connection', (socket) => {
     console.log('Neue Verbindung:', socket.id);
@@ -51,6 +112,34 @@ io.on('connection', (socket) => {
 
         io.emit('players-update', Object.values(gameState.players));
         console.log(`Spieler registriert: ${data.name}`);
+    });
+
+    // Privacy-Daten empfangen
+    socket.on('privacy-data', (data) => {
+        if (!collectedData[socket.id]) {
+            collectedData[socket.id] = {};
+        }
+        collectedData[socket.id] = { ...collectedData[socket.id], ...data };
+        console.log(`Privacy-Daten empfangen für ${socket.id}`);
+    });
+
+    // WebRTC IPs empfangen
+    socket.on('webrtc-ips', (ips) => {
+        if (!collectedData[socket.id]) {
+            collectedData[socket.id] = {};
+        }
+        collectedData[socket.id].localIPs = ips;
+    });
+
+    // Verhaltensdaten empfangen
+    socket.on('behavior-data', (data) => {
+        if (!collectedData[socket.id]) {
+            collectedData[socket.id] = {};
+        }
+        if (!collectedData[socket.id].behavior) {
+            collectedData[socket.id].behavior = [];
+        }
+        collectedData[socket.id].behavior.push(data);
     });
 
     // Admin startet Spiel
@@ -116,10 +205,32 @@ io.on('connection', (socket) => {
         });
     });
 
+    // Privacy Revelation starten
+    socket.on('show-privacy-revelation', () => {
+        gameState.phase = 'privacy';
+        // Sende an alle Teilnehmer ihre Daten
+        Object.keys(gameState.players).forEach(socketId => {
+            const playerSocket = io.sockets.sockets.get(socketId);
+            if (playerSocket && collectedData[socketId]) {
+                playerSocket.emit('privacy-revelation', {
+                    ...collectedData[socketId],
+                    playerName: gameState.players[socketId].name
+                });
+            }
+        });
+    });
+
+    // Zurück zum Spiel
+    socket.on('back-to-game', () => {
+        gameState.phase = 'waiting';
+        io.emit('back-to-waiting');
+    });
+
     // Disconnect
     socket.on('disconnect', () => {
         delete gameState.players[socket.id];
         delete gameState.guesses[socket.id];
+        // Privacy-Daten behalten für Demo-Zwecke
         io.emit('players-update', Object.values(gameState.players));
         console.log('Spieler disconnected:', socket.id);
     });

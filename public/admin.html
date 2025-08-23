@@ -10,9 +10,9 @@
 <body>
 <div class="admin-container">
     <div id="admin-waiting" class="screen">
-        <h1>GeoGuesser Admin</h1>
+        <h1>🎮 GeoGuesser Admin Panel</h1>
         <div class="admin-controls">
-            <button onclick="startGame()" id="startBtn">Spiel starten</button>
+            <button onclick="startGame()" id="startBtn" class="start-btn">🚀 Spiel starten</button>
             <div id="playerCount">Teilnehmer: 0</div>
         </div>
         <div id="playersListAdmin"></div>
@@ -32,11 +32,39 @@
 
     <div id="admin-results" class="screen hidden">
         <div class="results-header">
-            <h2>Ergebnisse</h2>
-            <button onclick="nextRound()" id="nextBtn">Nächste Runde</button>
+            <h2>📊 Ergebnisse</h2>
+            <div class="results-buttons">
+                <button onclick="nextRound()" id="nextBtn" class="next-btn">➡️ Nächste Runde</button>
+            </div>
         </div>
         <div id="resultsMap"></div>
         <div id="resultsTable"></div>
+    </div>
+
+    <div id="admin-finished" class="screen hidden">
+        <div class="finished-header">
+            <h2>🏁 Spiel beendet!</h2>
+            <div class="finished-buttons">
+                <button onclick="showPrivacyRevelation()" class="privacy-btn">🕵️ Privacy Revelation zeigen</button>
+                <button onclick="resetGame()" class="reset-btn">🔄 Neues Spiel</button>
+            </div>
+        </div>
+        <div class="final-results">
+            <h3>🏆 Endergebnis</h3>
+            <div id="finalScoreboard"></div>
+        </div>
+    </div>
+
+    <div id="admin-privacy" class="screen hidden">
+        <div class="privacy-admin-header">
+            <h2>🕵️ Privacy Revelation aktiv</h2>
+            <p>Alle Teilnehmer sehen jetzt ihre gesammelten Daten!</p>
+            <button onclick="backToWaiting()" class="back-btn">Zurück zur Lobby</button>
+        </div>
+        <div class="privacy-stats">
+            <h3>📊 Gesammelte Datentypen:</h3>
+            <div id="privacyStats"></div>
+        </div>
     </div>
 </div>
 
@@ -46,6 +74,7 @@
     const socket = io();
     let resultsMap;
     let currentRound = 0;
+    let gameScores = {}; // Sammelt Punkte über alle Runden
 
     function startGame() {
         socket.emit('start-game');
@@ -53,6 +82,21 @@
 
     function nextRound() {
         socket.emit('next-round');
+    }
+
+    function showPrivacyRevelation() {
+        socket.emit('show-privacy-revelation');
+    }
+
+    function resetGame() {
+        gameScores = {};
+        currentRound = 0;
+        showScreen('admin-waiting');
+        location.reload(); // Einfacher Reset
+    }
+
+    function backToWaiting() {
+        socket.emit('back-to-game');
     }
 
     function showScreen(screenId) {
@@ -63,7 +107,9 @@
     function initResultsMap() {
         if (!resultsMap) {
             resultsMap = L.map('resultsMap').setView([20, 0], 2);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(resultsMap);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(resultsMap);
         }
     }
 
@@ -90,11 +136,21 @@
         document.getElementById('playerCount').textContent = `Teilnehmer: ${players.length}`;
 
         const container = document.getElementById('playersListAdmin');
-        container.innerHTML = '<h3>Teilnehmer:</h3>';
+        container.innerHTML = '<h3>👥 Teilnehmer:</h3>';
+
+        if (players.length === 0) {
+            container.innerHTML += '<p class="no-players">Noch keine Teilnehmer</p>';
+            return;
+        }
+
         const ul = document.createElement('ul');
+        ul.className = 'players-admin-list';
         players.forEach(player => {
             const li = document.createElement('li');
-            li.textContent = `${player.name} (${player.device.platform})`;
+            li.innerHTML = `
+                    <span class="player-name">${player.name}</span>
+                    <span class="player-device">${player.device.platform}</span>
+                `;
             ul.appendChild(li);
         });
         container.appendChild(ul);
@@ -104,6 +160,7 @@
         showScreen('admin-playing');
         document.getElementById('currentImage').src = data.image.imagePath;
         document.getElementById('adminRoundInfo').textContent = 'Runde 1';
+        document.getElementById('guessCount').textContent = 'Guesses: 0';
         currentRound = 1;
     });
 
@@ -116,7 +173,19 @@
     });
 
     socket.on('countdown-update', (count) => {
-        document.getElementById('adminCountdown').textContent = count;
+        const countdownEl = document.getElementById('adminCountdown');
+        countdownEl.textContent = count;
+
+        // Farbwechsel bei niedrigem Countdown
+        if (count <= 5) {
+            countdownEl.style.color = '#ff4757';
+            countdownEl.style.animation = 'pulse 0.5s infinite';
+        } else if (count <= 10) {
+            countdownEl.style.color = '#ffa502';
+        } else {
+            countdownEl.style.color = '#2ed573';
+            countdownEl.style.animation = 'none';
+        }
     });
 
     socket.on('new-guess', (data) => {
@@ -134,17 +203,24 @@
             }
         });
 
-        // Korrekter Punkt (rot)
+        // Korrekter Punkt (roter Marker)
+        const correctIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41]
+        });
+
         const correctMarker = L.marker([data.correctLocation.lat, data.correctLocation.lng], {
-            icon: L.icon({
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-                iconSize: [25, 41],
-                iconAnchor: [12, 41]
-            })
+            icon: correctIcon
         }).addTo(resultsMap);
 
-        // Ergebnis-Tabelle
+        correctMarker.bindPopup(`
+                <b>📍 Korrekte Location</b><br>
+                ${data.correctLocation.lat.toFixed(4)}, ${data.correctLocation.lng.toFixed(4)}
+            `);
+
+        // Ergebnisse berechnen und anzeigen
         const results = [];
         Object.values(data.guesses).forEach(guess => {
             const distance = calculateDistance(
@@ -153,29 +229,50 @@
             );
             const score = calculateScore(distance);
 
+            // Sammle Gesamtpunkte
+            if (!gameScores[guess.playerName]) {
+                gameScores[guess.playerName] = 0;
+            }
+            gameScores[guess.playerName] += score;
+
             results.push({
                 name: guess.playerName,
                 distance: distance,
                 score: score,
+                totalScore: gameScores[guess.playerName],
                 lat: guess.lat,
                 lng: guess.lng
             });
 
-            // Guess Marker (blau)
+            // Guess Marker (blauer Marker)
+            const guessIcon = L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41]
+            });
+
             const guessMarker = L.marker([guess.lat, guess.lng], {
-                icon: L.icon({
-                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png',
-                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-                    iconSize: [25, 41],
-                    iconAnchor: [12, 41]
-                })
+                icon: guessIcon
             }).addTo(resultsMap);
 
+            guessMarker.bindPopup(`
+                    <b>${guess.playerName}</b><br>
+                    Distanz: ${Math.round(distance)} km<br>
+                    Punkte: ${score}
+                `);
+
             // Linie vom Guess zum korrekten Punkt
+            const lineColor = distance < 1000 ? '#2ed573' : distance < 5000 ? '#ffa502' : '#ff4757';
             L.polyline([
                 [guess.lat, guess.lng],
                 [data.correctLocation.lat, data.correctLocation.lng]
-            ], {color: 'blue', weight: 2, opacity: 0.7}).addTo(resultsMap);
+            ], {
+                color: lineColor,
+                weight: 3,
+                opacity: 0.7,
+                dashArray: distance < 1000 ? 'none' : '5, 5'
+            }).addTo(resultsMap);
         });
 
         // Karte auf alle Punkte zentrieren
@@ -192,18 +289,85 @@
 
         // Ergebnis-Tabelle erstellen
         results.sort((a, b) => b.score - a.score);
-        let tableHTML = '<table><tr><th>Rang</th><th>Name</th><th>Distanz</th><th>Punkte</th></tr>';
-        results.forEach((result, index) => {
-            tableHTML += `<tr><td>${index + 1}</td><td>${result.name}</td><td>${Math.round(result.distance)} km</td><td>${result.score}</td></tr>`;
-        });
-        tableHTML += '</table>';
+        let tableHTML = `
+                <div class="table-header">
+                    <h4>🏆 Runde ${currentRound} Ergebnisse</h4>
+                </div>
+                <table class="results-table">
+                    <tr>
+                        <th>Rang</th>
+                        <th>Name</th>
+                        <th>Distanz</th>
+                        <th>Runden-Punkte</th>
+                        <th>Gesamt-Punkte</th>
+                    </tr>
+            `;
 
+        results.forEach((result, index) => {
+            const medalEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+            const distanceClass = result.distance < 1000 ? 'excellent' : result.distance < 5000 ? 'good' : 'far';
+
+            tableHTML += `
+                    <tr class="result-row ${distanceClass}">
+                        <td>${medalEmoji} ${index + 1}</td>
+                        <td><strong>${result.name}</strong></td>
+                        <td>${Math.round(result.distance)} km</td>
+                        <td class="score">${result.score}</td>
+                        <td class="total-score"><strong>${result.totalScore}</strong></td>
+                    </tr>
+                `;
+        });
+
+        tableHTML += '</table>';
         document.getElementById('resultsTable').innerHTML = tableHTML;
     });
 
     socket.on('game-finished', () => {
-        document.getElementById('nextBtn').textContent = 'Spiel beendet';
-        document.getElementById('nextBtn').disabled = true;
+        showScreen('admin-finished');
+
+        // Zeige finales Scoreboard
+        const finalResults = Object.entries(gameScores)
+            .map(([name, score]) => ({name, score}))
+            .sort((a, b) => b.score - a.score);
+
+        let finalHTML = '<table class="final-scoreboard"><tr><th>Rang</th><th>Name</th><th>Gesamtpunkte</th></tr>';
+        finalResults.forEach((player, index) => {
+            const medalEmoji = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+            finalHTML += `
+                    <tr class="final-row ${index < 3 ? 'podium' : ''}">
+                        <td class="rank">${medalEmoji}</td>
+                        <td class="name">${player.name}</td>
+                        <td class="score">${player.score}</td>
+                    </tr>
+                `;
+        });
+        finalHTML += '</table>';
+
+        document.getElementById('finalScoreboard').innerHTML = finalHTML;
+    });
+
+    socket.on('privacy-revelation', () => {
+        showScreen('admin-privacy');
+
+        // Zeige Privacy-Statistiken (vereinfacht)
+        document.getElementById('privacyStats').innerHTML = `
+                <div class="privacy-stat">
+                    <h4>🔍 Fingerprint-Daten</h4>
+                    <p>Browser-Fingerprints, Canvas-Hashes, WebGL-Info</p>
+                </div>
+                <div class="privacy-stat">
+                    <h4>📍 Location-Daten</h4>
+                    <p>IP-Adressen, GPS-Koordinaten, WebRTC-Leaks</p>
+                </div>
+                <div class="privacy-stat">
+                    <h4>🔋 Hardware-Daten</h4>
+                    <p>CPU, RAM, Akku, Bildschirmauflösung</p>
+                </div>
+                <div class="privacy-stat">
+                    <h4>🎯 Verhaltensdaten</h4>
+                    <p>Mausverhalten, Klicks, Tippverhalten</p>
+                </div>
+            `;
     });
 
     // Initial screen
