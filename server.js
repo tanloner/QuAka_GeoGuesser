@@ -313,7 +313,12 @@ server.listen(PORT, () => {
     "lng": -122.4260317,
     "description": ""
   }
-
+,
+  {"imagePath": "images/Jan2.jpeg",
+    "lat": 37.17681,
+    "lng": 3.58982,
+    "description": ""
+  }
   ,
 
 
