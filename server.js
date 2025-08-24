@@ -237,7 +237,7 @@ io.on('connection', (socket) => {
 });
 
 function startCountdown() {
-    gameState.countdown = 30; // Änderbar
+    gameState.countdown = 5;
 
     if (gameState.countdownInterval) {
         clearInterval(gameState.countdownInterval);
@@ -251,7 +251,6 @@ function startCountdown() {
             clearInterval(gameState.countdownInterval);
             gameState.phase = 'results';
 
-            // Ergebnisse senden
             io.emit('round-finished', {
                 correctLocation: {
                     lat: gameState.currentImage.lat,
@@ -269,3 +268,69 @@ server.listen(PORT, () => {
     console.log(`Teilnehmer: http://localhost:${PORT}/client.html`);
     console.log(`Admin: http://localhost:${PORT}/admin.html`);
 });
+
+
+
+/*
+,
+  {"imagePath": "images/Luisa2.jpeg",
+    "lat": 20.9678688,
+    "lng": -89.6235829,
+    "description": ""
+  },
+  {"imagePath": "images/Jan1.jpeg",
+    "lat": 50.63766,
+    "lng": 3.06239,
+    "description": ""
+  },
+  {"imagePath": "images/Jan2.jpeg",
+    "lat": 37.17681,
+    "lng": 3.58982,
+    "description": ""
+  },
+  {"imagePath": "images/Jan4.jpeg",
+    "lat": 45.89845,
+    "lng": 6.13027,
+    "description": ""
+  },
+  {"imagePath": "images/Jonathan1.jpg",
+    "lat": 45.979968,
+    "lng": 9.261980,
+    "description": ""
+  },
+  {"imagePath": "images/Jonathan2.JPG",
+  "lat": 37.7597307,
+  "lng": -122.4260317,
+  "description": ""
+  },
+  {"imagePath": "images/Lukas_K1.jpg",
+    "lat": 45.979968,
+    "lng": 9.261980,
+    "description": ""
+  },
+  {"imagePath": "images/Lukas_K2.jpg",
+    "lat": 37.7597307,
+    "lng": -122.4260317,
+    "description": ""
+  }
+
+  ,
+
+
+  {
+    "imagePath": "images/Lukas2.jpg",
+    "lat": 50.630022,
+    "lng": 6.482453,
+    "description": ""
+  },
+  {"imagePath": "images/Patrik2.jpg",
+    "lat": 45.484794,
+    "lng": 9.202955,
+    "description": ""
+  },
+  {"imagePath": "images/Jonas2.jpeg",
+    "lat": 38.7635542,
+    "lng": 0.2229825,
+    "description": ""
+  },
+ */

@@ -1,20 +1,44 @@
 [
   {
-    "imagePath": "images/paris.jpg",
-    "lat": 48.8566,
-    "lng": 2.3522,
-    "description": "Eiffelturm, Paris"
+    "imagePath": "images/Lukas1.jpg",
+    "lat": 37.816688,
+    "lng": -8.793453,
+    "description": ""
   },
   {
-    "imagePath": "images/newyork.jpg",
-    "lat": 40.7484,
-    "lng": -73.9857,
-    "description": "Times Square, New York"
+    "imagePath": "images/Jonas1.jpeg",
+    "lat": 47.365674,
+    "lng": 8.5419187,
+    "description": ""
   },
-  {
-    "imagePath": "images/tokyo.jpg",
-    "lat": 35.6762,
-    "lng": 139.6503,
-    "description": "Tokyo"
+  {"imagePath": "images/Patrik1.jpg",
+    "lat": 2.202482,
+    "lng": 102.249435,
+    "description": ""
+  },
+  {"imagePath": "images/Luisa1.jpeg",
+  "lat": 50.468058,
+  "lng": 9.866457,
+  "description": ""
+  },
+  {"imagePath": "images/Jan1.jpeg",
+    "lat": 50.63766,
+    "lng": 3.06239,
+    "description": ""
+  },
+  {"imagePath": "images/Jan2.jpeg",
+    "lat": 37.17681,
+    "lng": 3.58982,
+    "description": ""
+  },
+  {"imagePath": "images/Jonathan1.jpg",
+    "lat": 45.979968,
+    "lng": 9.261980,
+    "description": ""
+  },
+  {"imagePath": "images/Lukas_K1.jpg",
+    "lat": 45.979968,
+    "lng": 9.261980,
+    "description": ""
   }
 ]
