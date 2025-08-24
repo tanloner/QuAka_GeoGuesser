@@ -237,7 +237,7 @@ io.on('connection', (socket) => {
 });
 
 function startCountdown() {
-    gameState.countdown = 5;
+    gameState.countdown = 40;
 
     if (gameState.countdownInterval) {
         clearInterval(gameState.countdownInterval);
